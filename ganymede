@@ -15,6 +15,8 @@ def start(args):
     try:
         remote_process = subprocess.check_output(cmd, shell=True)
         while True:
+            if remote_process == '':
+                break
             output = remote_process.stdout.readline()
             if output == '' and remote_process.poll() is not None:
                 break
@@ -22,25 +24,35 @@ def start(args):
                 print output.strip()
     except KeyboardInterrupt:
         print("")
-        return kill(args.user, args.host)
+        return kill(args.user, args.host, args.remote)
     except subprocess.CalledProcessError:
         print("Failed to start jupyter notebook at {}@{}:{}.".format(args.user, args.host, args.remote))
         print("The port may already be in use or the hostname may be invalid.")
+    else:
+        print("The connection was lost unexpectedly.")
+        print("Please run 'ganymede stop' to ensure that the notebook is stopped remotely.")
     return 0
 
 def stop(args):
-    return kill(args.user, args.host)
+    return kill(args.user, args.host, args.remote)
 
-def kill(user, hostname):
+def kill(user, hostname, port=''):
     cmd = ' '.join([
         "ssh",
         "{}@{}".format(user, hostname),
-        "'kill $(ps aux | grep '[j]upyter' | awk '\\''{print $2}'\\'')'"
+        "'kill $(ps aux | grep '[j]upyter.*{}' | awk '\\''{{print $2}}'\\'')'".format(port)
     ])
-    print("Stopping all jupyter notebooks at {}@{}...".format(user, hostname))
+    if port == "":
+        print("Stopping all jupyter notebooks at {}@{}...".format(user, hostname))
+    else:
+        print("Stopping jupyter notebook at {}@{} on port {}...".format(user, hostname, port))
+
     try:
         subprocess.check_call(cmd, shell=True, stderr=subprocess.PIPE)
-        print("Stopped all jupyter notebooks at {}@{}.".format(user, hostname))
+        if port == "":
+            print("Stopped jupyter notebooks at {}@{}.".format(user, hostname))
+        else:
+            print("Stopped jupyter notebook at {}@{} on port {}...".format(user, hostname, port))
     except subprocess.CalledProcessError:
         print("There are no instances of jupyter notebook to kill.")
     return 0
@@ -76,6 +88,7 @@ def main(argv=None):
     parser_stop = subparsers.add_parser('stop', help='Stops all jupyter notebooks.')
     parser_stop.add_argument('user', type=str, help='username to ssh with')
     parser_stop.add_argument('--host', '-H', type=str, default='supernova.ocf.berkeley.edu', help='hostname of the machine (default:%(default)s)')
+    parser_stop.add_argument('--remote', '-R', type=str, default='', help='port on the host machine to listen on (default: %(default)s)')
 
     parser_ls = subparsers.add_parser('ls', help='Lists all the currently running jupyter notebooks.')
     parser_ls.add_argument('user', type=str, help='username to ssh with')
