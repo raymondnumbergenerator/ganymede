@@ -11,8 +11,8 @@ def start(args):
         "-L {}:localhost:{}".format(args.local, args.remote),
         "'jupyter notebook --no-browser --notebook-dir={} --port={}'".format(args.dir, args.remote)
     ])
-    remote_process = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE)
     try:
+        remote_process = subprocess.check_output(cmd, shell=True)
         while True:
             output = remote_process.stdout.readline()
             if output == '' and remote_process.poll() is not None:
@@ -20,8 +20,9 @@ def start(args):
             if output:
                 print output.strip()
     except KeyboardInterrupt:
+        print("")
         kill(args.user, args.host)
-    return 1
+    return 0
 
 def stop(args):
     return kill(args.user, args.host)
@@ -33,15 +34,27 @@ def kill(user, hostname):
         "'kill $(ps aux | grep '[j]upyter' | awk '\\''{print $2}'\\'')'"
     ])
     try:
-        remote_process = subprocess.check_call(cmd, shell=True, stdout=subprocess.PIPE)
+        subprocess.check_call(cmd, shell=True)
+        print("Stopped all jupyter notebook at {}@{}.".format(user, hostname))
     except subprocess.CalledProcessError:
         print("There are no instances of jupyter notebook to kill.")
-    return 1
+    return 0
+
+def ls(args):
+    cmd = ' '.join([
+        "ssh",
+        "{}@{}".format(args.user, args.host),
+        "'jupyter notebook list'"
+    ])
+    remote_process = subprocess.check_output(cmd, shell=True)
+    print(remote_process)
+    return 0
 
 def main(argv=None):
     commands = {
-        'start':start,
-        'stop':stop
+        'start': start,
+        'stop': stop,
+        'ls': ls
     }
 
     parser = argparse.ArgumentParser(description='Starts a jupyter notebook on supernova and tunnels it to the local machine.')
@@ -55,10 +68,14 @@ def main(argv=None):
     parser_start.add_argument('--local', '-L', type=int, default='8888', help='port on this machine to tunnel to (default: %(default)s)')
     parser_start.add_argument('--remote', '-R', type=int, default='8888', help='port on the host machine to listen on (default: %(default)s)')
 
-    parser_stop = subparsers.add_parser('stop', help='Stops the jupyter notebook.')
+    parser_stop = subparsers.add_parser('stop', help='Stops all jupyter notebooks.')
     parser_stop.add_argument('user', type=str, help='username to ssh with')
     parser_stop.add_argument('--host', '-H', type=str, default='supernova.ocf.berkeley.edu', help='hostname of the machine (default:%(default)s)')
-    
+
+    parser_ls = subparsers.add_parser('ls', help='Lists all the currently running jupyter notebooks.')
+    parser_ls.add_argument('user', type=str, help='username to ssh with')
+    parser_ls.add_argument('--host', '-H', type=str, default='supernova.ocf.berkeley.edu', help='hostname of the machine (default:%(default)s)')
+
     args = parser.parse_args(argv)
 
     return commands[args.command](args)
