@@ -21,7 +21,7 @@ def start(args):
                 print output.strip()
     except KeyboardInterrupt:
         print("")
-        kill(args.user, args.host)
+        return kill(args.user, args.host)
     return 0
 
 def stop(args):
@@ -34,7 +34,7 @@ def kill(user, hostname):
         "'kill $(ps aux | grep '[j]upyter' | awk '\\''{print $2}'\\'')'"
     ])
     try:
-        subprocess.check_call(cmd, shell=True)
+        subprocess.check_call(cmd, shell=True, stderr=subprocess.PIPE)
         print("Stopped all jupyter notebook at {}@{}.".format(user, hostname))
     except subprocess.CalledProcessError:
         print("There are no instances of jupyter notebook to kill.")
@@ -58,7 +58,7 @@ def main(argv=None):
     }
 
     parser = argparse.ArgumentParser(description='Starts a jupyter notebook on supernova and tunnels it to the local machine.')
-    subparsers = parser.add_subparsers(dest='command', help='command to run')
+    subparsers = parser.add_subparsers(dest='command')
     subparsers.required = True
 
     parser_start = subparsers.add_parser('start', help='Starts the jupyter notebook.')
