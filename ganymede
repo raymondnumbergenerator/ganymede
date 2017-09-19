@@ -1,0 +1,66 @@
+#!/usr/bin/python
+
+import argparse
+import sys
+import subprocess
+
+def start(args):
+    cmd = ' '.join([
+        "ssh",
+        "{}@supernova.ocf.berkeley.edu".format(args.user),
+        "-L {}:localhost:{}".format(args.local, args.host),
+        "'jupyter notebook --no-browser --notebook-dir={} --port={}'".format(args.dir, args.host)
+    ])
+    remote_process = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE)
+    try:
+        while True:
+            output = remote_process.stdout.readline()
+            if output == '' and remote_process.poll() is not None:
+                break
+            if output:
+                print output.strip()
+    except KeyboardInterrupt:
+        kill(args.user)
+    return 1
+
+def stop(args):
+    return kill(args.user)
+
+def kill(user):
+    cmd = ' '.join([
+        "ssh",
+        "{}@supernova.ocf.berkeley.edu".format(user),
+        "'kill $(ps aux | grep '[j]upyter' | awk '\\''{print $2}'\\'')'"
+    ])
+    try:
+        remote_process = subprocess.check_call(cmd, shell=True, stdout=subprocess.PIPE)
+    except subprocess.CalledProcessError:
+        print("There are no instances of jupyter to kill.")
+        return 0
+    return 1
+
+def main(argv=None):
+    commands = {
+        'start':start,
+        'stop':stop
+    }
+
+    parser = argparse.ArgumentParser(description='Starts a jupyter notebook on supernova and tunnels it to the local machine.')
+    subparsers = parser.add_subparsers(dest='command', help='command to run')
+    subparsers.required = True
+
+    parser_start = subparsers.add_parser('start', help='Starts the jupyter notebook.')
+    parser_start.add_argument('user', type=str, help='ocf username to ssh with')
+    parser_start.add_argument('--dir', '-D', type=str, default='', help='directory to start notebook from')
+    parser_start.add_argument('--local', '-L', type=int, default='8888', help='port on this machine to tunnel to (default: %(default)s)')
+    parser_start.add_argument('--host', '-H', type=int, default='8888', help='port on the host machine to listen on (default: %(default)s)')
+
+    parser_stop = subparsers.add_parser('stop', help='Stops the jupyter notebook.')
+    parser_stop.add_argument('user', type=str, help='ocf username to ssh with')
+    
+    args = parser.parse_args(argv)
+
+    return commands[args.command](args)
+
+if __name__ == '__main__':
+    main()
