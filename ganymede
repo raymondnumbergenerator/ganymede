@@ -4,18 +4,7 @@ import argparse
 import subprocess
 import sys
 
-def start(args):
-    cmd = [
-        "ssh",
-        "{}".format(args.host),
-        "-L {}:localhost:{}".format(args.local, args.port)
-    ]
-    if args.compatibility:
-        cmd.append("'ipython notebook --no-browser --notebook-dir={} --port={} --port-retries=0'".format(args.dir, args.port))
-    else:
-        cmd.append("'jupyter notebook --no-browser --notebook-dir={} --port={} --port-retries=0'".format(args.dir, args.port))
-    cmd = ' '.join(cmd)
-
+def session(args, cmd):
     print("Tunneling jupyter notebook from {} to localhost:{}...".format(args.host, args.local))
 
     try:
@@ -29,16 +18,42 @@ def start(args):
             if output:
                 print output.strip()
     except KeyboardInterrupt:
-        print("")
-        return kill(args.host, args.port)
+        print("Disconnected from the jupyter notebook.")
+        print("Please run 'ganymede stop' to ensure that the notebook is stopped remotely or 'ganymede connect' to reconnect.")
     except subprocess.CalledProcessError:
         print("Failed to start jupyter notebook at {}:{}.".format(args.host, args.port))
         print("The port may already be in use or the hostname may be invalid.")
         print("The host may also be running an older version of jupyter, try running ganymede with the --compatibility flag.")
     else:
         print("The connection was lost unexpectedly.")
-        print("Please run 'ganymede stop' to ensure that the notebook is stopped remotely.")
+        print("Please run 'ganymede connect' to reconnect.")
     return 0
+
+def start(args):
+    cmd = [
+        "ssh",
+        "{}".format(args.host),
+        "-L {}:localhost:{}".format(args.local, args.port)
+    ]
+    if args.compatibility:
+        cmd.append("'ipython notebook --no-browser --notebook-dir={} --port={} --port-retries=0'".format(args.dir, args.port))
+    else:
+        cmd.append("'jupyter notebook --no-browser --notebook-dir={} --port={} --port-retries=0'".format(args.dir, args.port))
+    cmd = ' '.join(cmd)
+    
+    return session(args, cmd)
+
+def connect(args):
+    cmd = [
+        "ssh",
+        "{}".format(args.host),
+        "-L {}:localhost:{}".format(args.local, args.port),
+        "-N"
+    ]
+    cmd = ' '.join(cmd)
+    
+    print("Reconnecting to {}:{}...").format(args.host, args.port)
+    return session(args, cmd)
 
 def stop(args):
     return kill(args.host, args.port)
@@ -80,6 +95,7 @@ def ls(args):
 def main(argv=None):
     commands = {
         'start': start,
+        'connect': connect,
         'stop': stop,
         'ls': ls
     }
@@ -94,6 +110,11 @@ def main(argv=None):
     parser_start.add_argument('--local', '-L', type=int, default='8888', help='port on this machine to tunnel to (default: %(default)s)')
     parser_start.add_argument('--port', '-P', type=int, default='8888', help='port on the host machine to listen on (default: %(default)s)')
     parser_start.add_argument('--compatibility', '-C', action='store_true', help='launches the notebook using ipython instead of jupyter')
+    
+    parser_connect = subparsers.add_parser('connect', help='Connects to an existing jupyter notebook.')
+    parser_connect.add_argument('host', type=str, help='remote machine to ssh into')
+    parser_connect.add_argument('--local', '-L', type=int, default='8888', help='port on this machine to tunnel to (default: %(default)s)')
+    parser_connect.add_argument('--port', '-P', type=int, default='8888', help='port on the host machine that the server is listening on (default: %(default)s)')
 
     parser_stop = subparsers.add_parser('stop', help='Stops all jupyter notebooks.')
     parser_stop.add_argument('host', type=str, help='remote machine to ssh into')
